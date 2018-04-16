@@ -13,7 +13,20 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 	ie_index = {}
 	
 	for file in files:
-		index[file] = ReadWords(os.path.join(files_path, file), "r")
+		filepath = os.path.join(files_path, file)
+		index[file] = ReadWords(filepath, "r")
+		
+		# Encrypt the files as we build the index
+		to_encrypt = ReadFile(filepath, "r")
+		while len(to_encrypt) % 16 != 0:
+			to_encrypt = to_encrypt + ' '
+		
+		aes = AES.new(aesk, AES.MODE_CBC, "abc123ABC456XYZ0")
+		cipher = aes.encrypt(to_encrypt)
+		
+		cipher_file = file.replace('f', 'c')
+		
+		WriteFile(os.path.join(cipher_path, cipher_file), "w+", cipher)
 
 	# Populate inverted index
 	for key in index:
@@ -59,7 +72,7 @@ def ReadWords(path, args):
 # END ReadFile
 
 def main():	
-	LAMBDA = 256
+	LAMBDA = 32 # * 8 = 256 | Random generator returns bytes not bits
 
 	if argv[1] == "keygen":
 		WriteFile(argv[2], "w+", "")
