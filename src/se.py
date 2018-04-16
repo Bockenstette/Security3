@@ -1,17 +1,11 @@
 from Crypto.Cipher import AES
 from hashlib import sha256
-
-import os
-import binascii
-
 from sys import argv
+import os
 
 IV = "abc123ABC456XYZ0"
 
-
-#TODO: Inverted index is using f1 isntead of c1 for the filenames causing errors in the search
-
-def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
+def Enc(prfk, aesk, index_path, files_path, cipher_path):
 	files = os.listdir(files_path)
 	
 	index = {}
@@ -26,9 +20,7 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 		while len(to_encrypt) % 16 != 0:
 			to_encrypt = to_encrypt + ' '
 		
-		aes = AES.new(aesk, AES.MODE_CBC, IV)
-		cipher = aes.encrypt(to_encrypt)
-		
+		cipher = Encrypt(aesk, to_encrypt)
 		cipher_file = file.replace('f', 'c')
 		
 		WriteFile(os.path.join(cipher_path, cipher_file), "w+", cipher)
@@ -36,13 +28,13 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 	# Populate inverted index
 	for key in index:
 		for word in index[key]:
-			hex = Tokenize(word)	
+			token = Tokenize(word)	
 			
 			key = key.replace('f', 'c')
 			
-			if hex not in ie_index:
-				ie_index[hex] = []
-			ie_index[hex].append(key)
+			if token not in ie_index:
+				ie_index[token] = []
+			ie_index[token].append(key)
 			
 	# Write the invertex encrypted index to file
 	to_write = ""
@@ -54,7 +46,6 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 	WriteFile(index_path, "w+", to_write)
 	
 def Search(index, token, cipher_path, aesk):
-	cipher_files = os.listdir(cipher_path)
 	result_filepath = "../data/result.txt"
 	
 	# Build Index
@@ -71,23 +62,26 @@ def Search(index, token, cipher_path, aesk):
 		return
 
 	files_to_decrypt = ie_index[token]
-	print(files_to_decrypt)
-	
-	aes = AES.new(aesk, AES.MODE_CBC, IV)
+	files_string = ' '.join(files_to_decrypt)
+	print(files_string)
 	
 	to_write = ""
 	for file in files_to_decrypt:
-		cipher = ReadFile(os.path.join(cipher_path, file), "r")
+		cipher = ReadFile(os.path.join(cipher_path, file))
+		plaintext = Decrypt(aesk, cipher)
+
+		to_write = to_write + file + ' ' + plaintext + '\n'
 		
-		plaintext = aes.decrypt(cipher)
-		
-		to_write = to_write + file
-		to_write = to_write + ' ' + plaintext
-		to_write = to_write + '\n'
-		
-		print(to_write)
-		WriteFile(result_filepath, "w+", to_write)
+	print(to_write)
+	WriteFile(result_filepath, "w+", files_string + '\n' + to_write)
 	
+def Encrypt(aesk, plaintext):
+	aes = AES.new(aesk, AES.MODE_CBC, IV)
+	return aes.encrypt(plaintext)
+	
+def Decrypt(aesk, cipher):
+	aes = AES.new(aesk, AES.MODE_CBC, IV)	
+	return aes.decrypt(cipher)
 	
 def Tokenize(word):
 	return sha256(word.encode("utf-8")).hexdigest()
@@ -99,7 +93,7 @@ def WriteFile(path, args, content):
 	file.close()
 # END WriteFile
 	
-def ReadFile(path, args):
+def ReadFile(path, args = "r"):
 	file = open(path, args)
 	content = file.read()
 	file.close()
@@ -126,7 +120,7 @@ def main():
 		prfk = ReadFile(argv[2], "r")
 		aesk = ReadFile(argv[3], "r")
 		
-		Encrypt(prfk, aesk, argv[4], argv[5], argv[6])
+		Enc(prfk, aesk, argv[4], argv[5], argv[6])
 		
 	elif argv[1] == "token":
 		prf_key = argv[3]
