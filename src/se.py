@@ -6,6 +6,11 @@ import binascii
 
 from sys import argv
 
+IV = "abc123ABC456XYZ0"
+
+
+#TODO: Inverted index is using f1 isntead of c1 for the filenames causing errors in the search
+
 def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 	files = os.listdir(files_path)
 	
@@ -21,7 +26,7 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 		while len(to_encrypt) % 16 != 0:
 			to_encrypt = to_encrypt + ' '
 		
-		aes = AES.new(aesk, AES.MODE_CBC, "abc123ABC456XYZ0")
+		aes = AES.new(aesk, AES.MODE_CBC, IV)
 		cipher = aes.encrypt(to_encrypt)
 		
 		cipher_file = file.replace('f', 'c')
@@ -31,7 +36,9 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 	# Populate inverted index
 	for key in index:
 		for word in index[key]:
-			hex = sha256(word.encode("utf-8")).hexdigest()		
+			hex = Tokenize(word)	
+			
+			key = key.replace('f', 'c')
 			
 			if hex not in ie_index:
 				ie_index[hex] = []
@@ -46,7 +53,44 @@ def Encrypt(prfk, aesk, index_path, files_path, cipher_path):
 	
 	WriteFile(index_path, "w+", to_write)
 	
+def Search(index, token, cipher_path, aesk):
+	cipher_files = os.listdir(cipher_path)
+	result_filepath = "../data/result.txt"
 	
+	# Build Index
+	ie_index = {}
+	
+	lines = index.splitlines()
+	for line in lines:
+		words = line.split(' ')
+		ie_index[words[0]] = words[1:]
+		
+	# Error out if provided token isnt a searchable word
+	if token not in ie_index:
+		WriteFile(result_filepath, "w+", "")
+		return
+
+	files_to_decrypt = ie_index[token]
+	print(files_to_decrypt)
+	
+	aes = AES.new(aesk, AES.MODE_CBC, IV)
+	
+	to_write = ""
+	for file in files_to_decrypt:
+		cipher = ReadFile(os.path.join(cipher_path, file), "r")
+		
+		plaintext = aes.decrypt(cipher)
+		
+		to_write = to_write + file
+		to_write = to_write + ' ' + plaintext
+		to_write = to_write + '\n'
+		
+		print(to_write)
+		WriteFile(result_filepath, "w+", to_write)
+	
+	
+def Tokenize(word):
+	return sha256(word.encode("utf-8")).hexdigest()
 
 
 def WriteFile(path, args, content):
@@ -77,14 +121,23 @@ def main():
 	if argv[1] == "keygen":
 		WriteFile(argv[2], "w+", "")
 		WriteFile(argv[3], "w+", os.urandom(LAMBDA))
-	elif argv[1] == "enc":
-		prf_key = ReadFile(argv[2], "r")
-		aes_key = ReadFile(argv[3], "r")
-		index_path = argv[4]
-		files_path = argv[5]
-		cipher_path = argv[6]
 		
-		Encrypt(prf_key, aes_key, index_path, files_path, cipher_path)
+	elif argv[1] == "enc":
+		prfk = ReadFile(argv[2], "r")
+		aesk = ReadFile(argv[3], "r")
+		
+		Encrypt(prfk, aesk, argv[4], argv[5], argv[6])
+		
+	elif argv[1] == "token":
+		prf_key = argv[3]
+		WriteFile(argv[4], "w+", Tokenize(argv[2]))
+		
+	elif argv[1] == "search":
+		index = ReadFile(argv[2], "r")
+		token = ReadFile(argv[3], "r")
+		aesk = ReadFile(argv[5], "r")
+		
+		Search(index, token, argv[4], aesk)
 		
 		
 # END main
