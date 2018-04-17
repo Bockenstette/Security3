@@ -5,7 +5,22 @@ import os
 
 IV = "abc123ABC456XYZ0"
 
+# @Param
+# 	prfk		-	string
+#	aesk		-	string
+#	index_path	-	string
+#	files_path	-	string
+#	cipher_path	-	string
+# @Returns
+#	Nothing
+# @Desc
+#	Takes in a file directory to read into an inverted
+#	encrypted index. Saves the build ie_index at passed
+#	index path and encrypts all files with the passed
+#	AES key. Encrypted files then saved into passed
+#	cipher directory
 def Enc(prfk, aesk, index_path, files_path, cipher_path):
+	# Get list of all files in passed directory
 	files = os.listdir(files_path)
 	
 	index = {}
@@ -21,6 +36,7 @@ def Enc(prfk, aesk, index_path, files_path, cipher_path):
 			to_encrypt = to_encrypt + ' '
 		
 		cipher = Encrypt(aesk, to_encrypt)
+		# Rename the files from f# to c#
 		cipher_file = file.replace('f', 'c')
 		
 		WriteFile(os.path.join(cipher_path, cipher_file), "w+", cipher)
@@ -30,6 +46,7 @@ def Enc(prfk, aesk, index_path, files_path, cipher_path):
 		for word in index[key]:
 			token = Tokenize(word)	
 			
+			# Rename key from f# to c#
 			key = key.replace('f', 'c')
 			
 			if token not in ie_index:
@@ -45,6 +62,20 @@ def Enc(prfk, aesk, index_path, files_path, cipher_path):
 	
 	WriteFile(index_path, "w+", to_write)
 	
+	
+# @Param
+#	index		-	string
+#	token		-	string
+#	cipher_path	-	string
+#	aesk		-	string
+# @Returns
+#	Nothing
+# @Desc
+#	Loads in inverted encrypted index for searching.
+#	Searches for the passed token in the index, and 
+#	if found, decrypts the relevant ciphertext files
+#	with the passed AES key and displays them while
+#	also writing the result to a file.
 def Search(index, token, cipher_path, aesk):
 	result_filepath = "../data/result.txt"
 	
@@ -61,39 +92,74 @@ def Search(index, token, cipher_path, aesk):
 		WriteFile(result_filepath, "w+", "")
 		return
 
+	# Get the files that need to be decrypted and print them out
 	files_to_decrypt = ie_index[token]
 	files_string = ' '.join(files_to_decrypt)
 	print(files_string)
 	
+	# Decrypt the files and build up a string of their contents
+	# for printing and writing
 	to_write = ""
 	for file in files_to_decrypt:
 		cipher = ReadFile(os.path.join(cipher_path, file))
-		plaintext = Decrypt(aesk, cipher)
+		
+		plaintext = Decrypt(aesk, cipher.decode('string_escape'))
 
 		to_write = to_write + file + ' ' + plaintext + '\n'
 		
 	print(to_write)
 	WriteFile(result_filepath, "w+", files_string + '\n' + to_write)
+# END Search
 	
+	
+# @Param
+#	aesk		-	string
+#	plaintext	-	string
+# @Returns
+#	Ciphertext result of encryption
+# @Desc
+#	Takes in an AES key and a plaintext to encrypt,
+#	then ecrypts the plaintext and returns the result
 def Encrypt(aesk, plaintext):
 	aes = AES.new(aesk, AES.MODE_CBC, IV)
 	return aes.encrypt(plaintext)
+# END Encrypt
 	
+	
+# @Param
+#	aesk	-	string
+#	cipher	-	string
+# @Returns
+#	Decrypted plaintext
+# @Desc
+#	Takes in an AES key and a ciphertext to decrypt,
+#	then decrypts the ciphertext and returns the result
 def Decrypt(aesk, cipher):
 	aes = AES.new(aesk, AES.MODE_CBC, IV)	
 	return aes.decrypt(cipher)
+# END Decrypt
 	
+	
+# @Param
+#	word	-	string
+# @Returns
+#	Tokenized word
+# @Desc
+#	Takes in a word then performs sha256 to simulate a prf.
+#	Requires no key
 def Tokenize(word):
 	return sha256(word.encode("utf-8")).hexdigest()
-
-
+# END Tokenize
+	
+	
 def WriteFile(path, args, content):
 	file = open(path, args)
 	file.write(content)
 	file.close()
 # END WriteFile
 	
-def ReadFile(path, args = "r"):
+	
+def ReadFile(path, args = "rb"):
 	file = open(path, args)
 	content = file.read()
 	file.close()
@@ -101,13 +167,23 @@ def ReadFile(path, args = "r"):
 	return content
 # END ReadFile
 
+
+# @Param
+#	path	-	string
+#	args	-	string
+# @Returns
+#	List of all words in the file found at path
+# @Desc
+#	Reads in a file found at path then splits every word found
+#	within into a list, which is then returned.
 def ReadWords(path, args):
 	file = open(path, args)
 	content = [word for line in file for word in line.split()]
 	file.close()
 	
 	return content
-# END ReadFile
+# END ReadWords
+
 
 def main():	
 	LAMBDA = 32 # * 8 = 256 | Random generator returns bytes not bits
@@ -132,8 +208,6 @@ def main():
 		aesk = ReadFile(argv[5], "r")
 		
 		Search(index, token, argv[4], aesk)
-		
-		
 # END main
 
 if __name__ == "__main__":
